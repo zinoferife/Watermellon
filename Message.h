@@ -14,8 +14,15 @@ namespace wm {
 		Message() {}
 		inline asio::streambuf& GetStreamBuffer() { return mStreamBuffer; }
 		inline js::json& GetJsonMessage() { return mJsonMessage; }
+		inline const asio::streambuf& GetStreamBuffer() const { return mStreamBuffer; }
+		inline const js::json& GetJsonMessage() const  { return mJsonMessage; }
 		bool ParseStreamBuffer();
-
+		const std::string GetJsonAsString() const;
+		void Clear();
+		//value symantics
+		Message& operator=(const Message& message);
+		Message(const Message&& message) noexcept;
+		Message(const Message& message);
 	private:
 		//read until \r\n 
 		asio::streambuf mStreamBuffer;

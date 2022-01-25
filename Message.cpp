@@ -17,3 +17,32 @@ bool wm::Message::ParseStreamBuffer()
 	auto json_string = data.substr(0, pos);
 	mJsonMessage = js::json(json_string);
 }
+
+const std::string wm::Message::GetJsonAsString() const
+{
+	std::stringstream ss;
+	ss << mJsonMessage;
+	return ss.str();
+}
+
+void wm::Message::Clear()
+{
+	mJsonMessage = {};
+}
+
+Message& wm::Message::operator=(const Message& message)
+{
+	// TODO: insert return statement here
+	this->mJsonMessage = message.mJsonMessage;
+	return (*this);
+}
+
+wm::Message::Message(const Message&& message) noexcept
+{
+	this->mJsonMessage = std::move(message.mJsonMessage);
+}
+
+wm::Message::Message(const Message& message)
+{
+	this->mJsonMessage = message.mJsonMessage;
+}
