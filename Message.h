@@ -19,6 +19,7 @@ namespace wm {
 		bool ParseStreamBuffer();
 		const std::string GetJsonAsString() const;
 		void Clear();
+		bool Empty();
 		//value symantics
 		Message& operator=(const Message& message);
 		Message(const Message&& message) noexcept;

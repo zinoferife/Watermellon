@@ -20,14 +20,17 @@ bool wm::Message::ParseStreamBuffer()
 
 const std::string wm::Message::GetJsonAsString() const
 {
-	std::stringstream ss;
-	ss << mJsonMessage;
-	return ss.str();
+	return mJsonMessage.dump();
 }
 
 void wm::Message::Clear()
 {
 	mJsonMessage = {};
+}
+
+bool wm::Message::Empty()
+{
+	return (mStreamBuffer.size() == 0);
 }
 
 Message& wm::Message::operator=(const Message& message)

@@ -19,7 +19,7 @@ int main(int argc, char** argv)
 		sock.read_some(asio::buffer(std::addressof(buffer), 1024));
 	}
 	catch (asio::system_error& error){
-		spdlog::error("{} {}", error.what(), error.code().message());
+		spdlog::error("{} {:d}", error.what(), error.code().value());
 	}
 
 	spdlog::info("Hello, Watermellon server Log");

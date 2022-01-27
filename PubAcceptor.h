@@ -10,7 +10,7 @@ namespace wm {
 
 	protected:
 		virtual void HandleError(const asio::error_code& ec) override;
-		virtual void OnAccept(const asio::error_code& ec, std::shared_ptr<asio::ip::tcp::socket> socket);
+		virtual void OnAccept(const asio::error_code& ec, std::shared_ptr<asio::ip::tcp::socket> socket) override;
 
 	};
 }

@@ -6,7 +6,10 @@
 #include <map>
 #include <shared_mutex>
 #include <sstream>
-class Subscriber;
+#include <tuple>
+
+#include "Subscriber.h"
+
 namespace wm {
 
 	//subcribers subscrib to publisers to publish data to them
@@ -25,36 +28,35 @@ namespace wm {
 		Publisher(std::shared_ptr<socket_type> socket) : mSocket(socket), mInitialised(false) {
 			//read the data from the client
 			read();
-
 		}
 		void InitPublisher() {
 			auto& json = mReadMessage.GetJsonMessage();
 			try {
 				if (json["Type"] == "Init") {
-					if (json["Pub_id"] == "0") {
+					if (json["Pub_id"] == boost::uuids::to_string(boost::uuids::nil_uuid())) {
 						//generate pub id for this client new client
 						GenerateID();
 					}
 					else {
-						std::stringstream ss;
-						boost::uuids::uuid id;
-						ss << json["Pub_id"];
-						ss >> id;
+						boost::uuids::uuid id = boost::uuids::string_generator()(std::string(json["Pub_id"]));
 						if (id != boost::uuids::nil_uuid()) {
 							SetId(id);
-							auto [iter, inserted] = mActivePublishers.insert({ id, pub });
+							std::unique_lock<std::shared_timed_mutex> lock(mActivePublisherMutex);
+							auto self = this->shared_from_this();
+							auto [iter, inserted] = mActivePublishers.insert({ id, self});
+							lock.unlock();
 							if (!inserted) {
 								spdlog::error("Publisher already exisit, closing this publisher");
 								wm::Message message;
 								message.GetJsonMessage() = {
 									{"Type", "Error"},
-									{"Code", "100"},
+									{"Code", 100},
 									{"Message", "Publisher Already exists"}
 								};
 								deliver(message);
 
 								//shut down the client socket on both recieveing and sending messages
-								mSocket.shutdown(typename socket_t::shutdown_both);
+								//mSocket->shutdown(typename socket_t::shutdown_both);
 								return;
 							}
 						}
@@ -63,21 +65,22 @@ namespace wm {
 							wm::Message message;
 							message.GetJsonMessage() = {
 								{"Type", "Error"},
-								{"Code", "102"},
-								{"Message", "Publisher id is invalid, resend init message with \"Pub_id = 0\" to generate new ID"}
+								{"Code", 102},
+								{"Message", "Publisher id is invalid, resend init message with \"Pub_id = nil_id\" to generate new ID"}
 							};
 							deliver(message);
 							return;
 						}
 					}
 					SetName(json["Name"]);
+					ProcessPendingSubscribers();
 					//properly initialised the publisher
 					wm::Message message;
 					message.GetJsonMessage() = {
-						{"Type", "Init"}.
-						{"Code", "200"},
+						{"Type", "Init"},
+						{"Code", 200},
 						{"Message", "Sucessfully initialised the publisher"},
-						{"ID", },
+						{"ID", boost::uuids::to_string(GetClientID())},
 						{"Name", GetName()}
 					};
 					deliver(message);
@@ -87,65 +90,66 @@ namespace wm {
 					wm::Message message;
 					message.GetJsonMessage() = {
 						{"Type", "Error"},
-						{"Code", "101"},
+						{"Code", 101},
 						{"Message", "Expected an init message from client, invalid message sent"}
 					};
 					deliver(message);
 					return;
-				}catch (js::json::type_error& error) {
+				}
+			}catch (js::json::type_error& error) {
 					spdlog::error("Json format error in Publisher, {}", error.what());
 					wm::Message message;
 					message.GetJsonMessage() = {
 						{"Type", "Error"},
-						{"Code", "111"},
+						{"Code", 111},
 						{"Message", "Json format error, Json message was not in the correct schema"}
 					};
 					deliver(message);
 					return;
-				}
-				mInitialised = true;
 			}
+			mInitialised = true;
 		}
-			virtual void deliver(const wm::Message & message) override {
-				//deliver message to the clients that are connected as publisher,
-				do_write(message);
-			}
-			virtual void read() override {
-				//read a message from the client, 
-				do_read();
-			}
+		virtual void deliver(const wm::Message & message) override {
+			//deliver message to the clients that are connected as publisher,
+			do_write(message);
+		}
+		virtual void read() override {
+			//read a message from the client, 
+			do_read();
+		}
 
-			virtual void send() override {
-				//send messages to the subcriber that wants the message
-				//only forward messages types that are subsribers messages
-				std::shared_lock<std::shared_timed_mutex>(mMutex);
-				for (auto& message : mMessageQueue) {
-					auto& json = message.GetJsonMessage();
-					if (json["Type"] == "Submesg") {
-						std::stringstream ss;
-						boost::uuids::uuid id;
-						ss << json["Sub_id"];
-						ss >> id;
-						auto iter = mSubscibers.find(id);
-						if (iter != mSubscibers.end()) {
-							(*iter).second->deliver(message);
-						}
+		virtual void send() override {
+			//send messages to the subcriber that wants the message
+			//only forward messages types that are subsribers messages
+			std::shared_lock<std::shared_timed_mutex>(mMutex);
+			for (auto& message : mMessageQueue) {
+				auto& json = message.GetJsonMessage();
+				if (json["Type"] == "Submesg") {
+					std::string subid = json["Sub_id"];
+					boost::uuids::uuid id = boost::uuids::string_generator()(subid);
+					auto iter = mSubscibers.find(id);
+					if (iter != mSubscibers.end()) {
+						(*iter).second->deliver(message);
 					}
 				}
 			}
-			void AddSubscriber(client_ptr subsriber) {
-				auto [iter, inserted] = mSubscibers.insert({ subsriber->GetClientId(), subsriber });
-				if (inserted) {
-					subsriber->deliver(ComposeWelcomeMessage());
-				}
+		}
+		void AddSubscriber(client_ptr subsriber) {
+			auto [iter, inserted] = mSubscibers.insert({ subsriber->GetClientID(), std::dynamic_pointer_cast<Subscriber<socket_t>, Client>(subsriber)});
+			if (inserted) {
+				subsriber->deliver(ComposeWelcomeMessage());
 			}
-
+		}
+		virtual const js::json& get_info() const override {
+			return mPublisherInformation;
+		}
 	private:
 
 		void do_write(const wm::Message & message) {
 			auto data = message.GetJsonAsString();
 			data += "\r\n";
-			asio::async_write(*mSocket, asio::buffer(data), [this, self = shared_from_this()](asio::error_code& ec, size_t bytes){
+			auto self = this->shared_from_this();
+			asio::async_write(*mSocket, asio::buffer(data), [this, self](const asio::error_code& ec, size_t bytes){
 				OnWrite(ec, bytes);
 			});
 		}
@@ -153,7 +157,8 @@ namespace wm {
 		void do_read() {
 			//read a message from the publisher client,
 			//schedle a read on the socket
-			asio::async_read_until(*mSocket, mReadMessage.GetStreamBuffer(), , "\r\n", [this, self = shared_from_this()](asio::error_code& ec, size_t bytes){
+			auto self = this->shared_from_this();
+			asio::async_read_until(*mSocket, mReadMessage.GetStreamBuffer(), "\r\n", [this, self](const asio::error_code& ec, size_t bytes){
 				OnRead(ec, bytes);
 			});
 		}
@@ -173,7 +178,7 @@ namespace wm {
 
 		}
 
-
+	
 		wm::Message ComposeWelcomeMessage() {
 			Message m;
 			m.GetJsonMessage() = {
@@ -190,8 +195,33 @@ namespace wm {
 			return m;
 		}
 
+		void ProcessPendingSubscribers()
+		{
+			std::shared_lock<std::shared_timed_mutex> lock(mPendingSubscribersMutex);
+			auto iter = mPendingSubscribers.find(GetClientID());
+			if (iter != mPendingSubscribers.end()) {
+				auto& vector = iter->second;
+				for (auto sub : vector) {
+					auto [iter, inserted] = mSubscibers.insert({ sub->GetClientID(),
+						std::dynamic_pointer_cast<Subscriber<socket_t>, Client>(sub)});
+					//ignore if  already inserted
+					if (inserted) {
+						auto self = this->shared_from_this();
+						iter->second->SetPublisher(self);
+						sub->deliver(ComposeWelcomeMessage());
+						iter->second->WriteBacklog();
+					}
+				}
+				lock.unlock();
+				{
+					std::unique_lock<std::shared_timed_mutex> uLock(mPendingSubscribersMutex);
+					mPendingSubscribers.erase(GetClientID());
+				}
+			}
+		}
+
 	private:
-		void OnRead(asio::error_code & ec, size_t bytes_read) {
+		void OnRead(const asio::error_code & ec, size_t bytes_read) {
 			if (!ec) {
 				//check message 
 				//log message header
@@ -220,7 +250,7 @@ namespace wm {
 			}
 		}
 
-		void OnWrite(asio::error_code & ec, size_t bytes) {
+		void OnWrite(const asio::error_code& ec, size_t bytes) {
 			if (!ec) {
 				//log message write status
 				return;
@@ -229,8 +259,8 @@ namespace wm {
 				//connection closed. initiate a close operation on the publisher 
 			}
 			else {
-				spdlog::error("Could not write to publisher {}:{:d}, {}", mSocket.remote_endpoint().address().to_string(),
-					mSocket.remote_endpoint().port(), boost::uuids::to_string(GetClientID()));
+				spdlog::error("Could not write to publisher {}:{:d}, {}", mSocket->remote_endpoint().address().to_string(),
+					mSocket->remote_endpoint().port(), boost::uuids::to_string(GetClientID()));
 			}
 		}
 
@@ -241,7 +271,7 @@ namespace wm {
 		wm::Message mReadMessage;
 		std::shared_timed_mutex mMutex;
 		std::deque<wm::Message> mMessageQueue;
-		std::map<boost::uuids::uuid, client_ptr> mSubscibers;
+		std::map<boost::uuids::uuid, std::shared_ptr<Subscriber<socket_t>>> mSubscibers;
 		std::shared_ptr<socket_t> mSocket;
 	};
 }

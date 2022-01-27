@@ -139,6 +139,7 @@
     <ClCompile Include="PubAcceptor.cpp" />
     <ClCompile Include="Publisher.cpp" />
     <ClCompile Include="Server.cpp" />
+    <ClCompile Include="SubAcceptor.cpp" />
     <ClCompile Include="Subscriber.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -149,6 +150,7 @@
     <ClInclude Include="PubAcceptor.h" />
     <ClInclude Include="Publisher.h" />
     <ClInclude Include="Server.h" />
+    <ClInclude Include="SubAcceptor.h" />
     <ClInclude Include="Subscriber.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
