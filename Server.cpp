@@ -1,8 +1,10 @@
 #include "Server.h"
-wm::Server::Server(asio::io_context& context, asio::ip::tcp::endpoint& endpoint)
+wm::Server::Server(asio::io_context& context)
 : mContext(context){
 	mWork.reset(new asio::io_context::work(context));
-	
+	Client::InitMessageHandlers();
+	Publisher::InitMessageHandlers();
+	Subscriber::InitMessageHandlers();
 }
 
 void wm::Server::AddAcceptor(std::unique_ptr<Acceptor>&& acceptor)
@@ -15,6 +17,7 @@ void wm::Server::StopServer()
 	spdlog::info("Stoping watermellon...");
 	mPubAcceptor->Stop();
 	mSubAcceptor->Stop();
+	mContext.stop();
 	for (auto& th : mthreadPool) {
 		th->join();
 	}

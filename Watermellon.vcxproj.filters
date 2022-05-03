@@ -74,5 +74,8 @@
     <ClInclude Include="SubAcceptor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="holde.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -15,8 +15,9 @@ void PubAcceptor::OnAccept(const asio::error_code& ec, std::shared_ptr<asio::ip:
 		HandleError(ec);
 		return;
 	}
-	auto pub = std::make_shared<wm::Publisher<asio::ip::tcp::socket>>(socket);
+	auto pub = std::make_shared<wm::Publisher>(socket);
 	if (pub) {
+		pub->Start();
 		spdlog::info("Publisher connected on {}:{:d}", socket->remote_endpoint().address().to_string(),
 			socket->remote_endpoint().port());
 		//supposed to add to the servers pub list

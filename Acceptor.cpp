@@ -20,7 +20,7 @@ void Acceptor::Start()
 {
 	asio::error_code ec;
 	mAcceptor.listen(max_listen_log, ec);
-	if(ec){
+	if(!ec){
 		InitAccept();
 	}
 	else{

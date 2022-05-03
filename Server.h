@@ -16,7 +16,7 @@ namespace wm {
 	{
 	public:
 		constexpr static int max_thread = 10;
-		Server(asio::io_context& context, asio::ip::tcp::endpoint& endpoint);
+		Server(asio::io_context& context);
 		void AddAcceptor(std::unique_ptr<Acceptor>&& acceptor);
 		void StopServer();
 		void StartServer();

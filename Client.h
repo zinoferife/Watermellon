@@ -10,6 +10,8 @@
 #include <mutex>
 #include <shared_mutex>
 #include <nlohmann/json.hpp>
+#include <functional>
+#include "spdlog/spdlog.h"
 
 namespace wm {
 	class Client
@@ -28,9 +30,20 @@ namespace wm {
 		virtual void read() = 0;
 		virtual const js::json& get_info() const = 0;
 		virtual void send() {}
+		virtual void Start() {}
+		virtual void Close() {}
+		virtual void ShutDown() {}
+
+	public:
+		virtual void OnError(const wm::Message& message);
  	protected:
 		std::string mClientName;
 		boost::uuids::uuid mClientId;
+
+	public:
+		static void InitMessageHandlers();
+		static void AddMessageHandlers(const std::string& MesType, const std::function<void(const wm::Message&, std::shared_ptr<Client> client)>& function);
+		static std::unordered_map<std::string, std::function<void(const wm::Message&, std::shared_ptr<Client> client)>> mMessageHandlers;
 	};
 	typedef std::shared_ptr<Client> client_ptr;
 	extern std::unordered_map<boost::uuids::uuid,client_ptr> mActivePublishers;

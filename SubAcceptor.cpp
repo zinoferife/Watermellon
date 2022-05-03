@@ -16,8 +16,9 @@ void wm::SubAcceptor::OnAccept(const asio::error_code& ec, std::shared_ptr<asio:
 		HandleError(ec);
 		return;
 	}
-	auto sub = std::make_shared<wm::Subscriber<asio::ip::tcp::socket>>(socket);
+	auto sub = std::make_shared<wm::Subscriber>(socket);
 	if (sub) {
+		sub->Start();
 		spdlog::info("Subscriber connected on {}:{:d}", socket->remote_endpoint().address().to_string(),
 			socket->remote_endpoint().port());
 		if (!mStopFlag.load()) {

@@ -15,7 +15,9 @@ bool wm::Message::ParseStreamBuffer()
 		return false;
 	}
 	auto json_string = data.substr(0, pos);
-	mJsonMessage = js::json(json_string);
+	std::stringstream ss2(json_string, std::ios::in);
+	ss2 >> mJsonMessage;
+	return true;
 }
 
 const std::string wm::Message::GetJsonAsString() const
